@@ -71,7 +71,7 @@ class Generator:
 
     def cmd_parser(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--loops', type=int,  default=30, dest='loops')
+        parser.add_argument('--loops', type=int,  default=2000, dest='loops')
         parser.add_argument('--functions', type=int,  default=2, dest='functions')
         parser.add_argument('--subfunctions', type=int,  default=2, dest='subfunctions')
         parser.add_argument('--instruction-size', type=int,  default=30, dest='instruction')

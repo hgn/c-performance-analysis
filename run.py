@@ -7,6 +7,9 @@ import StringIO
 import glob
 import pprint
 import shutil
+import argparse
+import time
+import datetime
 
 pp = pprint.PrettyPrinter(indent=0)
 
@@ -15,7 +18,10 @@ VERBOSE = False
 class Test:
 
     def __init__(self):
-        pass
+        self.log = sys.stderr.write
+        self.out = sys.stdout.write
+        self.cmd_parser()
+        self.start_time = time.time()
 
     def set_verbosity(self, flag):
        global VERBOSE
@@ -105,7 +111,7 @@ class Test:
     def clean_data_dirs(self):
         dirs = glob.glob('functions-*')
         for dirname in dirs:
-            sys.stderr.write("clean directory: %s\n" % (dirname))
+            sys.stderr.write("# purge data directory: %s\n" % (dirname))
             shutil.rmtree(dirname)
 
 
@@ -185,8 +191,6 @@ class Test:
 
     def execute_test(self, conf, test_path):
 
-        sys.stderr.write("execute [%s]\n" % (self.format_conf(conf)))
-
         result = self.compile_run_perf(conf)
         if not result:
             return None
@@ -209,22 +213,43 @@ class Test:
 
 
     def cmd_parser(self):
-
         parser = argparse.ArgumentParser()
         parser.add_argument('--realtime', action="store_true", default=False, dest='realtime')
         self.args = parser.parse_args()
 
+    def seconds_to_human(self, sec):
+        return str(datetime.timedelta(seconds=sec))
 
 
-    def do(self):
+    def real_run(self, conf):
 
+        current_time = time.time()
+        elapsed = float(current_time) - self.start_time
+        remaining = (float(elapsed) / conf["test-no"]) * \
+                (conf["test-max"] - conf["test-no"])
+
+        self.log("\r# run %d of %d [remaining: %s; %s]" % \
+                (conf["test-no"], conf["test-max"], \
+                self.seconds_to_human(remaining), self.format_conf(conf)))
+        path = self.construct_path(conf)
+        self.execute_test(conf, path)
+        self.save_aout(path)
+
+
+    def dry_run(self, conf):
+        pass
+
+
+    def do(self, func, test_max):
+
+        i = 1
         self.clean_data_dirs()
         self.executable_name = "a.out"
 
         conf = dict()
-
-        conf["loops"]  = 5000
-        conf["repeat"] = 5 # for perf stat
+        conf["test-max"] = test_max
+        conf["loops"]    = 5000
+        conf["repeat"]   = 5 # for perf stat
 
         conf["functions"] = 100
         while conf["functions"] < 120:
@@ -237,13 +262,17 @@ class Test:
                 conf["instruction-size"] = 40
                 while conf["instruction-size"] < 350:
 
-                    path = self.construct_path(conf)
-                    self.execute_test(conf, path)
-                    self.save_aout(path)
+                    conf['test-no'] = i
+                    func(conf)
+                    i += 1
 
                     conf["instruction-size"] += 35
                 conf["sub-functions"] += 10
             conf["functions"] += 40
 
+        return i
+
 if __name__ == "__main__":
-    Test().do()
+    test = Test()
+    test_max = test.do(test.dry_run, None)
+    test.do(test.real_run, test_max)
